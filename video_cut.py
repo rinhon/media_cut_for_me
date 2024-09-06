@@ -55,6 +55,8 @@ class VideoEditor:
         self.video_cut_temp_folder = ""
         # 截取时间点击标识符
         self.click_count = 0
+        # 当前获取的时长
+        self.current_time = 0
 
         # 选择文件
         self.select_file_button = ttk.Button(
@@ -76,7 +78,7 @@ class VideoEditor:
         self.video_info_text1 = ttk.Label(self.root, text="", font=("仿宋", 12))
         self.video_info_text1.pack(anchor="center")
 
-        # 设置Scale的宽度
+        # 设置Scale
         self.scale = ttk.Scale(
             self.root,
             from_=0,
@@ -85,11 +87,17 @@ class VideoEditor:
             variable=self.cut_list_time,
         )
         self.scale.pack(fill="x", pady=20)
-
+        
+        # 获取时间
         self.get_time_button = ttk.Button(
             self.root, text="获取时间", command=self.get_time
         )
         self.get_time_button.pack(pady=10)
+        # 预览
+        self.preview_button = ttk.Button(self.root, text="预览", command=self.preview_video)
+        self.preview_button.pack(pady=10)
+    
+
 
         # 创建一个Label来显示实时滚动的值
         self.current_value_label2 = ttk.Label(
@@ -281,11 +289,11 @@ class VideoEditor:
             return
         # 点击次数
         self.click_count += 1
-        current_time = int(self.scale.get())
+        self.current_time = int(self.scale.get())
 
         # 点击次数为奇数数时，获取开始时间
         if self.click_count % 2 == 1:
-            self.start_time = self.format_time(current_time)
+            self.start_time = self.format_time(self.current_time)
             self.current_start_time_value_label.config(
                 text=f"开始时间：{self.start_time}"
             )
@@ -293,7 +301,7 @@ class VideoEditor:
 
         else:  # 点击次数为偶数时，获取结束时间
             # 将字符串转换为datetime对象
-            self.end_time = self.format_time(current_time)
+            self.end_time = self.format_time(self.current_time)
             time1 = datetime.strptime(self.start_time, "%H:%M:%S")
             time2 = datetime.strptime(self.end_time, "%H:%M:%S")
             if time2 <= time1:
@@ -307,14 +315,13 @@ class VideoEditor:
                     text=f"结束时间：{self.end_time}"
                 )
                 self.click_count = 0
-                Messagebox.show_waring(
+                Messagebox.show_warning(
                     "时间选择错误", "结束时间小于开始时间，请重新从开始时间添加时间片段"
                 )
                 logging.warning("时间选择不合理")
                 return
             self.current_end_time_value_label.config(text=f"结束时间：{self.end_time}")
             self.cut_list.append((self.start_time, self.end_time))
-            self.cut_list.sort(key=lambda x: x[0])
 
             # 并存储时间
             self.cut_list_show.insert(
@@ -371,38 +378,66 @@ class VideoEditor:
         else:
             logging.info(f"文件夹 '{temp_folder}' 已存在。")
         # 生成剪切文件名
-        for i,cut_file in self.cut_list:
+        for cut_file in self.cut_list:
             logging.info(f"剪切片段：{cut_file}")
             # 剪切文件名
             cut_file_name = (
-                file_name + "__" + cut_file[0] + "--" + cut_file[1] + file_extension
+                file_name + "xxx" + cut_file[0].replace(":","-") + "--" + cut_file[1].replace(":","-") + file_extension
             )
             # 剪切文件路径
-            cut_file_path = temp_folder / cut_file_name
+            cut_file_path = Path(temp_folder) / cut_file_name
+
+            logging.info(f"剪切文件路径：{cut_file_path}")
             # 添加到合并路径列表
             self.temp_file_list.append(cut_file_path)
+
             # 调用ffmpeg命令进行剪切
             # 构建ffmpeg命令
             ffmpeg_command = [
                 'ffmpeg',
-                '-i', self.video_path,            # 输入文件
-                '-ss', cut_file[0],            # 剪切开始时间
-                '-to', cut_file[1],              # 剪切结束时间
-                '-c', 'copy',                 # 复制编解码器，不重新编码
-                cut_file_path                  # 输出文件
+                '-i', self.video_path,      # 输入文件
+                '-ss', cut_file[0],         # 剪切开始时间
+                '-to', cut_file[1],         # 剪切结束时间
+                '-c', 'copy',               # 复制编解码器，不重新编码
+                cut_file_path               # 输出文件
             ]
-
+            logging.info(f"ffmpeg命令：{ffmpeg_command}")
             # 运行ffmpeg命令
             try:
-                subprocess.run(ffmpeg_command, check=True)
+                result = subprocess.run(ffmpeg_command, check=True)
+                Messagebox.ok(title="完成", message=f"视频剪切完成，剪切的视频文件路径：{result}")
                 logging.info(f"视频剪切成功，输出文件：{cut_file_path}")
             except subprocess.CalledProcessError as e:
+                Messagebox.show_error(title="错误", message=f"视频剪切失败，错误片段{e}")
                 logging.info(f"剪切视频时出错：错误片段{cut_file[0]}--{cut_file[1]}")
                 logging.info(f"剪切视频时出错：{e}")
                 return 
 
         Messagebox.show_info(title="完成", message=f"视频剪切完成，剪切的视频文件路径：{self.video_cut_temp_folder}")
 
+    # 预览
+    def preview_video(self):
+        if self.current_time >=5 :
+            start_time = self.format_time(self.current_time-5)
+        else:
+            start_time = self.format_time(0)
+        if self.video_time-5 <= self.current_time:
+            end_time = self.format_time(self.video_time)
+        else:
+            end_time = self.format_time(self.current_time+5)
+
+    
+        gif_command = [
+        'ffmpeg',
+        '-i',Path(self.video_path),
+        '-ss', start_time,
+        '-to', end_time,
+        '-c:v', 'libx264',
+        '-tune', 'stillimage',
+        '-filter:v', f"fps=10,scale=320:-1:flags=lanczos [x]; [x][1:v] paletteuse",
+        '-f', 'gif',
+        Path(self.video_cut_temp_folder) / "preview.gif"
+    ]
 
 
 def center_window(width, height):
