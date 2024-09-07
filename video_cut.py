@@ -1,19 +1,21 @@
-from tkinter import *
 import tkinter as tk
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter import filedialog
-import tkinter as tk
 import logging
 import os
 import datetime
 from datetime import datetime
 from ttkbootstrap.dialogs import Messagebox
-
+from PIL import Image, ImageTk
+import cv2
 import subprocess
 import json
 from pathlib import Path
 import subprocess
+import ctypes
+import sys
+import atexit
 
 
 # 指定日志文件的绝对路径
@@ -87,17 +89,16 @@ class VideoEditor:
             variable=self.cut_list_time,
         )
         self.scale.pack(fill="x", pady=20)
-        
+
         # 获取时间
         self.get_time_button = ttk.Button(
             self.root, text="获取时间", command=self.get_time
         )
         self.get_time_button.pack(pady=10)
         # 预览
-        self.preview_button = ttk.Button(self.root, text="预览", command=self.preview_video)
+        self.preview_button = ttk.Button(
+            self.root, text="预览", command=self.preview_video)
         self.preview_button.pack(pady=10)
-    
-
 
         # 创建一个Label来显示实时滚动的值
         self.current_value_label2 = ttk.Label(
@@ -120,7 +121,8 @@ class VideoEditor:
         )
         self.current_end_time_value_label.pack()
         # 片段列表
-        self.cut_list_time = ttk.Label(self.root, text=f"片段列表", font=("仿宋", 12))
+        self.cut_list_time = ttk.Label(
+            self.root, text=f"片段列表", font=("仿宋", 12))
         self.cut_list_time.pack()
         self.cut_list_show = ttk.ScrolledText(
             self.root,
@@ -151,16 +153,16 @@ class VideoEditor:
             # video_info = self.video_time_length()
 
             if video_info:
-                size =int( video_info.get("format", []).get("size"))
+                size = int(video_info.get("format", []).get("size"))
                 for suffix in ['B', 'KB', 'MB', 'GB', 'TB']:  # 定义各单位
                     if size < 1024.0 or suffix == 'TB':  # 如果size小于1024或已经是TB级别，则退出循环
                         break
                     size /= 1024.0  # 将size转换为下一单位
-                format_size =  f"{size:.2f} {suffix}"  # 返回格式化后的文件大小字符串
-                 
+                format_size = f"{size:.2f} {suffix}"  # 返回格式化后的文件大小字符串
+
                 format_name = video_info.get("format", []).get("format_name")
 
-                for strems in  video_info.get("streams"):
+                for strems in video_info.get("streams"):
                     if strems.get("codec_type", {}) == "video":
                         width = strems.get("width", 0)
                         height = strems.get("height", 0)
@@ -211,12 +213,9 @@ class VideoEditor:
             .__add__(str(int(duration % 3600 / 60)))
             .__add__("分钟")
         )
-    
-
-    
-
 
     # 获取视频信息
+
     def getvideo_info(self, filepath):
         """
         解析视频文件，获取视频的基本信息
@@ -258,8 +257,10 @@ class VideoEditor:
         minutes = (seconds % 3600) // 60
         seconds = seconds % 60
         hours_str = str(int(hours)) if hours >= 10 else "0" + str(int(hours))
-        minutes_str = str(int(minutes)) if minutes >= 10 else "0" + str(int(minutes))
-        seconds_str = str(int(seconds)) if seconds >= 10 else "0" + str(int(seconds))
+        minutes_str = str(
+            int(minutes)) if minutes >= 10 else "0" + str(int(minutes))
+        seconds_str = str(
+            int(seconds)) if seconds >= 10 else "0" + str(int(seconds))
         return f"{hours_str}:{minutes_str}:{seconds_str}"
 
     def on_mouse_wheel(self, event):
@@ -297,7 +298,8 @@ class VideoEditor:
             self.current_start_time_value_label.config(
                 text=f"开始时间：{self.start_time}"
             )
-            self.current_end_time_value_label.config(text=f"结束时间：{self.end_time}")
+            self.current_end_time_value_label.config(
+                text=f"结束时间：{self.end_time}")
 
         else:  # 点击次数为偶数时，获取结束时间
             # 将字符串转换为datetime对象
@@ -320,7 +322,8 @@ class VideoEditor:
                 )
                 logging.warning("时间选择不合理")
                 return
-            self.current_end_time_value_label.config(text=f"结束时间：{self.end_time}")
+            self.current_end_time_value_label.config(
+                text=f"结束时间：{self.end_time}")
             self.cut_list.append((self.start_time, self.end_time))
 
             # 并存储时间
@@ -357,7 +360,8 @@ class VideoEditor:
 
         # 检查是否至少有一个片段
         if not self.cut_list:
-            Messagebox.show_warning(title="未选择片段错误 ",message="片段不完整，或没有开始时间，或没有结束时间，请重新选择片段")
+            Messagebox.show_warning(
+                title="未选择片段错误 ", message="片段不完整，或没有开始时间，或没有结束时间，请重新选择片段")
             logging.warning("没有选择片段")
             return
         # 生成临时文件夹,以文件名为文件夹名
@@ -382,7 +386,9 @@ class VideoEditor:
             logging.info(f"剪切片段：{cut_file}")
             # 剪切文件名
             cut_file_name = (
-                file_name + "xxx" + cut_file[0].replace(":","-") + "--" + cut_file[1].replace(":","-") + file_extension
+                file_name + "xxx" +
+                cut_file[0].replace(":", "-") + "--" +
+                cut_file[1].replace(":", "-") + file_extension
             )
             # 剪切文件路径
             cut_file_path = Path(temp_folder) / cut_file_name
@@ -411,33 +417,129 @@ class VideoEditor:
                 Messagebox.show_error(title="错误", message=f"视频剪切失败，错误片段{e}")
                 logging.info(f"剪切视频时出错：错误片段{cut_file[0]}--{cut_file[1]}")
                 logging.info(f"剪切视频时出错：{e}")
-                return 
+                return
 
-        Messagebox.show_info(title="完成", message=f"视频剪切完成，剪切的视频文件路径：{self.video_cut_temp_folder}")
+        Messagebox.show_info(
+            title="完成", message=f"视频剪切完成，剪切的视频文件路径：{self.video_cut_temp_folder}")
 
     # 预览
     def preview_video(self):
-        if self.current_time >=5 :
-            start_time = self.format_time(self.current_time-5)
+        # 生成临时文件夹,以文件名为文件夹名
+        # 文件名带后缀
+        file_name_with_extension = Path(self.video_path).name
+        # 文件名
+        file_name = Path(self.video_path).stem
+        # 文件后缀
+        file_extension = Path(self.video_path).suffix
+        self.video_suffix = file_extension
+        temp_folder = Path(self.video_path).parent / file_name
+        self.video_cut_temp_folder = temp_folder
+        # 检查文件夹是否存在
+        if not temp_folder.exists():
+            # 如果不存在，创建文件夹
+            temp_folder.mkdir()
+            logging.info(f"文件夹 '{temp_folder}' 已创建。")
         else:
-            start_time = self.format_time(0)
-        if self.video_time-5 <= self.current_time:
-            end_time = self.format_time(self.video_time)
-        else:
-            end_time = self.format_time(self.current_time+5)
+            logging.info(f"文件夹 '{temp_folder}' 已存在。")
+        preview_gif = Path(self.video_cut_temp_folder) / "preview.mp4"
 
-    
-        gif_command = [
-        'ffmpeg',
-        '-i',Path(self.video_path),
-        '-ss', start_time,
-        '-to', end_time,
-        '-c:v', 'libx264',
-        '-tune', 'stillimage',
-        '-filter:v', f"fps=10,scale=320:-1:flags=lanczos [x]; [x][1:v] paletteuse",
-        '-f', 'gif',
-        Path(self.video_cut_temp_folder) / "preview.gif"
-    ]
+        if self.scale.get() >= 5:
+            preview_video_start_time = self.format_time(self.scale.get()-5)
+        else:
+            preview_video_start_time = self.format_time(0)
+        if self.video_time-5 <= self.scale.get():
+            preview_video_end_time = self.format_time(self.video_time)
+        else:
+            preview_video_end_time = self.format_time(self.scale.get()+5)
+
+        if os.path.exists(preview_gif) is True:
+            try:
+                os.chmod(preview_gif, 0o777)
+                os.remove(Path(preview_gif))
+            except FileNotFoundError:
+                print(f"{Path(preview_gif)} 文件不存在")
+            except PermissionError:
+                print(f"没有权限删除: {Path(preview_gif)}")
+            except Exception as e:
+                print(f"删除文件时出错: {e}")
+        else:
+            logging.info(f"创建预览文件: {preview_gif}")
+           # 构建ffmpeg命令
+            ffmpeg_command = [
+                'ffmpeg',
+                '-i', self.video_path,      # 输入文件
+                '-ss', preview_video_start_time,         # 剪切开始时间
+                '-to', preview_video_end_time,         # 剪切结束时间
+                '-c', 'copy',               # 复制编解码器，不重新编码
+                preview_gif               # 输出文件
+            ]
+            logging.info(f"ffmpeg命令：{ffmpeg_command}")
+            # 运行ffmpeg命令
+            try:
+                result = subprocess.run(
+                    ffmpeg_command, check=True, capture_output=True, text=True)
+                print(result)
+                logging.info(f"预览文件：{preview_gif}")
+            except subprocess.CalledProcessError as e:
+                logging.info(f"预览文件：时出错：{e}")
+        
+        self.show_custom_messagebox(preview_gif)
+
+    def show_custom_messagebox(self, video_path):
+        # 视频预览弹窗
+        # 创建自定义弹窗
+        self.custom_box = ttk.Toplevel(self.root)
+        self.custom_box.title("视频播放")
+
+        # 设置视频捕捉
+        cap = cv2.VideoCapture(video_path)
+
+        # 创建标签用于显示视频帧
+        video_label_preview = ttk.Label(self.custom_box)
+        video_label_preview.pack()
+
+        def update_frame():
+            ret, frame = cap.read()
+            if ret:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(frame)
+                imgtk = ImageTk.PhotoImage(image=img)
+                video_label_preview.imgtk = imgtk
+                video_label_preview.configure(image=imgtk)
+                video_label_preview.after(10, update_frame)
+            else:
+                cap.release()
+
+        def replay_video():
+            cap.release()  # 释放当前视频捕捉
+            cap.open(video_path)  # 重新打开视频
+            update_frame()  # 更新帧
+
+        # 创建重播按钮
+        replay_button = ttk.Button(
+            self.custom_box, text="重播", command=replay_video)
+        replay_button.pack(pady=5)
+
+
+
+        update_frame()
+
+
+def is_admin():
+    """检查当前用户是否具有管理员权限"""
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+
+def run_as_admin():
+    """以管理员权限重新启动该程序"""
+    if not is_admin():
+        # 重新启动程序
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+        sys.exit()
 
 
 def center_window(width, height):
@@ -463,9 +565,9 @@ if __name__ == "__main__":
     center_window(1000, 900)
 
     # 设置窗口的图标
-    # root.iconbitmap(r"c:\Users\Rinhon\Desktop\python_script\media.ico")
+    root.iconbitmap(r"c:\Users\Rinhon\Desktop\python_script\media.ico")
     # root.iconbitmap(f"media.ico")
-    root.iconbitmap(f"f:\workspace\电影票.ico")
+    # root.iconbitmap(f"f:\workspace\电影票.ico")
 
     # 设定是否能够改变窗口的宽和高尺寸
     root.resizable(width=True, height=True)
@@ -476,3 +578,11 @@ if __name__ == "__main__":
 
     # 显示窗口
     root.mainloop()
+
+
+def cleanup():
+    print("程序正在关闭，执行清理操作...")
+
+
+# 注册关闭时执行的函数
+atexit.register(cleanup)
